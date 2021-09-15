@@ -24,20 +24,20 @@ master = "local"
 "Create and instantiate a spark session"
 spark = pyspark.sql.SparkSession.builder.master(master) \
     .appName(appName) \
-    .config("spark.jars", "/home/olekaroi/postgresql-42.2.23.jar") \
+    .config("spark.jars", config.spark_jars_config) \
     .getOrCreate()
 
 "Create Connection to the Database"
 
-db_connection = spark.read \
+rt_db_connection = spark.read \
     .format("jdbc") \
     .option("url", config.data_mart_url) \
-    .option("user", config.user) \
-    .option("password", config.password) \
+    .option("user", config.db_user) \
+    .option("password", config.db_password) \
     .option("driver", "org.postgresql.Driver")
 
 "Extract the names of tables from information schema"
-table_names = db_connection.option("dbtable", "information_schema.tables")\
+table_names = rt_db_connection.option("dbtable", "information_schema.tables")\
     .load() \
     .filter("table_schema = 'routing_schema'")\
     .select("table_name")
@@ -49,11 +49,11 @@ table_names = table_names.filter(table_names.table_name != 'routing_combined')
 table_names_list = [row.table_name for row in table_names.collect()]
 
 """Read the first Routing Table in the Routing Table List"""
-first_routing_table = db_connection.option("dbtable", f"routing_schema.{table_names_list[0]}").load()
+first_routing_table = rt_db_connection.option("dbtable", f"routing_schema.{table_names_list[0]}").load()
 
 """Update the first routing table above by concatenating it with the rest of the routing tables in the database"""
 for tablename in table_names_list[1:]:
-    routing_tables_df = db_connection.option("dbtable", f"routing_schema.{tablename}") \
+    routing_tables_df = rt_db_connection.option("dbtable", f"routing_schema.{tablename}") \
         .load()
 
     """"
@@ -90,4 +90,3 @@ for tablename in table_names_list[1:]:
 rename the combined dataframe for convenience
 """
 combined_routing_table = first_routing_table
-
